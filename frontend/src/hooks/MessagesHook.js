@@ -15,6 +15,7 @@ export const useMessagesSocket = () => {
     const normalizeMessage = (msg) => ({
         ...msg,
         text: msg.message_text,
+        created_at: new Date().toISOString(),
         from_user_id: msg.from_user_id || msg.user_from?.id
     });
 
@@ -24,7 +25,8 @@ export const useMessagesSocket = () => {
                 type: "message_create",
                 from_user: fromUserId,
                 to_chat: chatId,
-                text
+                text,
+                created_at: new Date().toISOString(),
             }));
         } else {
             console.warn("WS не подключен. Сообщение не отправлено:", text);

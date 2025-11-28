@@ -181,7 +181,7 @@ export default function Header() {
                         />
                     )}
 
-                    {accessToken && (
+                    {accessToken ? (
                         <div className="header-actions">
                             <Link to="/me" className="profile-link">
                                 <img
@@ -191,6 +191,10 @@ export default function Header() {
                                 />
                             </Link>
                         </div>
+                    ) : (
+                        <Link to="/reg">
+                            присоединиться
+                        </Link>
                     )}
                 </div>
             </div>
