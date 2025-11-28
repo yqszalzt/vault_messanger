@@ -1,0 +1,80 @@
+from rest_framework import status
+from django.db.models import Q
+from django.shortcuts import get_object_or_404, get_list_or_404
+
+from accounts.responses import SuccessResponse, ErrorResponse
+from accounts.views import AuthenticateView
+from accounts.models import Profile
+
+from .models import Chat, Message
+from .serializers import ChatSerializer, ChatCreateSerializer, MessageSerializer
+
+
+class ChatView(AuthenticateView):
+
+    """
+    
+    Работа с чатами.
+    Создание нового чата, просмотр всех сообщений из чата
+
+    """
+
+    def get(self, request):
+        __param_get_all_chats = request.GET.get("ac", None)
+        if __param_get_all_chats:
+            profile = get_object_or_404(Profile, user=request.user)
+            chats = Chat.objects.filter(Q(user_1=profile) | Q(user_2=profile))
+            return SuccessResponse(ChatSerializer(chats, many=True, context={"request": request}).data, status=status.HTTP_200_OK)
+    
+    def post(self, request):
+        """
+        action:
+            create - создаёт переписку между пользователями
+        """
+        __param_action = request.GET.get("action", None)
+        if not __param_action in ["create"]:
+            return ErrorResponse({"error": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        this_user=get_object_or_404(Profile, user=request.user)
+
+        match __param_action:
+            case 'create':
+                serializer = ChatCreateSerializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+
+                # профиль второго юзера
+                user_2=get_object_or_404(Profile, id=serializer.validated_data.get("user"))
+
+                # проверка на уже имеющийся чат
+                chat = Chat.objects.filter(
+                    (Q(user_1=this_user) & Q(user_2=user_2)) | (Q(user_1=user_2) & Q(user_2=this_user))
+                ).first()
+                if chat:
+                    return SuccessResponse(ChatSerializer(chat, context={"request": request}).data, status=status.HTTP_200_OK)
+
+                chat = Chat.objects.create(
+                    user_1=this_user,
+                    user_2=user_2,
+                    is_active=True
+                )
+                chat.save()
+
+                return SuccessResponse(ChatSerializer(chat, context={"request": request}).data, status=status.HTTP_200_OK)
+            
+
+class MessageView(AuthenticateView):
+
+    def get(self, request):
+        """
+        1) Возвращает все сообщения из выбранного чата
+        """
+
+        __param_chat_id = request.GET.get("chat", None)
+        if __param_chat_id:
+            chat = get_object_or_404(Chat, id=__param_chat_id)
+            messages = Message.objects.filter(chat=chat)
+            serializer = MessageSerializer(messages, many=True, context={"request": request})
+            return SuccessResponse(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        pass

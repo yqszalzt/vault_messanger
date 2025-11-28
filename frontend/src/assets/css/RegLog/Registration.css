@@ -1,0 +1,129 @@
+.registration-page {
+    max-width: 600px;
+    margin: 6rem auto;
+    padding: 2rem;
+    background: var(--background-light); 
+    color: var(--text-dark);
+    border-radius: 16px; 
+    box-shadow: 0 10px 30px rgba(0, 7, 45, 0.1); 
+    transition: transform var(--transition-speed) ease;
+}
+
+.registration-page .title {
+    text-align: center;
+    font-size: 32px;
+    margin-bottom: 30px;
+    font-weight: 800;
+    color: var(--primary-color); 
+}
+
+.registration-page .form .field {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 25px;
+}
+
+.registration-page .form .field-label {
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.registration-page .form .input-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    position: relative;
+}
+
+.registration-page .form .input-field {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    font-size: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    outline: none;
+    transition: all var(--transition-speed);
+}
+
+.registration-page .form .input-field:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 7, 45, 0.15); 
+}
+
+.registration-page .form .phone-input .flag {
+    width: 28px;
+    height: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.registration-page .form .phone-input .input-field {
+    /* Не требует изменений */
+}
+
+.registration-page .form .password-input .eye-icon {
+    position: absolute;
+    right: 15px;
+    cursor: pointer;
+    color: var(--secondary-color); /* Используем темный синий для иконки */
+    font-size: 20px;
+    transition: color var(--transition-speed);
+}
+
+.registration-page .form .password-input .eye-icon:hover {
+    color: var(--accent-gradient-start); /* Акцентный синий при наведении */
+}
+
+/* Кнопка: Премиальный, Глубокий Градиент */
+.registration-page .submit-btn {
+    width: 100%;
+    padding: 15px;
+    font-size: 18px;
+    /* Градиент от акцентного синего к очень темному индиго */
+    background: linear-gradient(135deg, var(--accent-gradient-start), var(--secondary-color)); 
+    color: var(--text-light);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+    margin-top: 15px;
+    /* Легкая тень от кнопки */
+    box-shadow: 0 4px 10px rgba(0, 7, 45, 0.2); 
+    transition: all var(--transition-speed) ease-in-out;
+}
+
+.registration-page .submit-btn:hover {
+    /* Градиент становится более темным при наведении (более "вдавленным" вид) */
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); 
+    opacity: 1;
+    transform: translateY(-1px);
+    /* Более выраженная тень в тон основного цвета */
+    box-shadow: 0 8px 18px rgba(0, 7, 45, 0.4); 
+}
+
+.registration-page .submit-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 3px 8px rgba(0, 7, 45, 0.15);
+}
+
+/* Ссылка для входа */
+.registration-page .login-link {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 14px;
+    color: #666;
+}
+
+.registration-page .login-link a {
+    color: var(--primary-color); /* Самый глубокий синий */
+    text-decoration: none;
+    font-weight: 600;
+    transition: color var(--transition-speed);
+}
+
+.registration-page .login-link a:hover {
+    color: var(--accent-gradient-start); /* Акцентный синий при наведении */
+    text-decoration: underline;
+}
