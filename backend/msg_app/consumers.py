@@ -1,25 +1,25 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 import json
+from urllib.parse import parse_qs
 from .models import Chat, Message
 from accounts.models import Profile
 
 class MessagesConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        token = self.scope['query_string'].decode().split('token=')[-1]
+        query = parse_qs(self.scope['query_string'].decode())
+        token = query.get('token', [None])[0]
         self.user = await self.get_user_from_token(token)
 
         if not self.user:
             await self.close()
             return
 
-        # --- Всегда работаем через Profile ---
         self.profile = await self.get_profile(self.user)
         if not self.profile:
             await self.close()
             return
 
-        # Группы теперь привязываются к профилю
         self.user_group_name = f"profile_{self.profile.id}"
         await self.channel_layer.group_add(self.user_group_name, self.channel_name)
         await self.accept()
@@ -49,19 +49,18 @@ class MessagesConsumer(AsyncWebsocketConsumer):
 
             message = await self.create_message(text, self.profile, chat)
             profile_data = await self.serialize_profile(self.profile)
-            # --- Отправляем себе ---
             await self.send(text_data=json.dumps({
                 "type": "create_message",
                 "message": {
                     "id": message.id,
                     "chat_id": chat.id,
                     "message_text": message.message_text,
+                    "is_edit": message.is_edit,
                     "from_user_id": self.profile.id,
                     "user_from": profile_data
                 }
             }))
 
-            # --- Отправляем оппоненту ---
             opponent = chat.get_opponent(self.profile)
             await self.channel_layer.group_send(
                 f"profile_{opponent.id}",
@@ -72,10 +71,39 @@ class MessagesConsumer(AsyncWebsocketConsumer):
                         "chat_id": chat.id,
                         "message_text": message.message_text,
                         "from_user_id": self.profile.id,
+                        "is_edit": message.is_edit,
                         "user_from": profile_data
                     }
                 }
             )
+        elif data.get("type") == "edit_message":
+            message_id = data.get("data").get("message_id")
+            new_text = data.get("data").get("text")
+            message = await self.get_message(message_id=message_id)
+            if message:
+                await self.update_message_text(message, new_text)
+                await self.send(text_data=json.dumps({
+                    "type": "edit_message_success",
+                    "message": {
+                        "id": message.id,
+                        "message_text": message.message_text,
+                        "is_edit": True,
+                    }
+                }))
+
+        elif data.get("type") == "delete_message":
+            print(data)
+            message_id = data.get("data").get("message_id")
+            message = await self.get_message(message_id=message_id)
+            if message:
+                await self.delete_message(message)
+                await self.send(text_data=json.dumps({
+                    "type": "delete_message_success",
+                    "message": {
+                        "id": message_id
+                    }
+                }))
+
 
     async def new_message(self, event):
         await self.send(text_data=json.dumps({
@@ -114,3 +142,23 @@ class MessagesConsumer(AsyncWebsocketConsumer):
     def serialize_profile(self, profile):
         from accounts.serializers import UserProfileSerializer
         return UserProfileSerializer(profile).data
+    
+    @database_sync_to_async
+    def get_message(self, message_id: int):
+        try:
+            message = Message.objects.get(id=message_id)
+            return message
+        except Message.DoesNotExist:
+            return None
+    
+    @database_sync_to_async
+    def update_message_text(self, message: Message, text: str):
+        message.message_text = text
+        message.is_edit = True
+        message.save()
+        return True
+    
+    @database_sync_to_async
+    def delete_message(self, message: Message):
+        message.delete()
+        return True

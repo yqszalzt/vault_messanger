@@ -16,7 +16,8 @@ export const useMessagesSocket = () => {
         ...msg,
         text: msg.message_text,
         created_at: new Date().toISOString(),
-        from_user_id: msg.from_user_id || msg.user_from?.id
+        from_user_id: msg.from_user_id || msg.user_from?.id,
+        is_edit: msg.is_edit || false
     });
 
     const sendMessage = useCallback((text, fromUserId, chatId) => {
@@ -30,6 +31,17 @@ export const useMessagesSocket = () => {
             }));
         } else {
             console.warn("WS не подключен. Сообщение не отправлено:", text);
+        }
+    }, []);
+
+    const sendMessage2 = useCallback((type, data) => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+                type: type,
+                data: data
+            }));
+        } else {
+            console.warn("WS не подключен. Сообщение не отправлено");
         }
     }, []);
 
@@ -59,59 +71,68 @@ export const useMessagesSocket = () => {
                 try {
                     const data = JSON.parse(event.data);
 
-                    // СВОЁ сообщение
                     if (data.type === "create_message") {
                         setCreatedMessage(normalizeMessage(data.message));
+                        return;
                     }
 
-                    // ЧУЖОЕ сообщение
-                    if (data.type === "new_message") {
-                        setIncomingMessage(normalizeMessage(data.message));
+                    if (data.type === "new_message" ||
+                        data.type === "edit_message_success" ||
+                        data.type === "delete_message_success") {
+
+                        if (data.type === "new_message") {
+                            setIncomingMessage(normalizeMessage(data.message));
+                        } else {
+                            setIncomingMessage(data);
+                        }
+                        return;
                     }
+
                 } catch (err) {
-                console.error("Ошибка парсинга WS:", err);
+                    console.error("Ошибка парсинга WS:", err);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log("WS закрыт");
+                setConnected(false);
+            };
+
+            ws.onerror = (err) => console.error("WS ошибка:", err);
+        };
+
+        const handleVisibilityChange = () => {
+            clearVisibilityTimer();
+
+            if (document.visibilityState === "visible") {
+                connectWebSocket();
+            } else {
+                visibilityTimerRef.current = setTimeout(() => {
+                    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+                        wsRef.current.close();
+                    }
+                }, 5000);
             }
         };
 
-        ws.onclose = () => {
-            console.log("WS закрыт");
-            setConnected(false);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        window.addEventListener("beforeunload", clearVisibilityTimer);
+
+        connectWebSocket();
+
+        return () => {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            window.removeEventListener("beforeunload", clearVisibilityTimer);
+            clearVisibilityTimer();
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close();
         };
+    }, [accessToken]);
 
-        ws.onerror = (err) => console.error("WS ошибка:", err);
+    return {
+        sendMessage,
+        sendMessage2,
+        incomingMessage,
+        createdMessage,
+        connected
     };
-
-    const handleVisibilityChange = () => {
-        clearVisibilityTimer();
-
-        if (document.visibilityState === "visible") {
-            connectWebSocket();
-        } else {
-            visibilityTimerRef.current = setTimeout(() => {
-                if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
-                    wsRef.current.close();
-                }
-            }, 5000);
-        }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("beforeunload", clearVisibilityTimer);
-
-    connectWebSocket();
-
-    return () => {
-        document.removeEventListener("visibilitychange", handleVisibilityChange);
-        window.removeEventListener("beforeunload", clearVisibilityTimer);
-        clearVisibilityTimer();
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close();
-    };
-}, [accessToken]);
-
-return {
-    sendMessage,
-    incomingMessage,
-    createdMessage,
-    connected
-};
 };

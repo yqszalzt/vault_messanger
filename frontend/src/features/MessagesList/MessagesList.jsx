@@ -58,7 +58,7 @@ export default function MessagesList() {
     // Context Menu State
     const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, message: null });
 
-    const { sendMessage, incomingMessage, createdMessage } = useMessagesSocket();
+    const { sendMessage, sendMessage2, incomingMessage, createdMessage } = useMessagesSocket();
     const messagesEndRef = useRef(null);
 
     // --- ЛОГИКА РЕСАЙЗА ---
@@ -143,6 +143,22 @@ export default function MessagesList() {
     // Обработка входящих
     useEffect(() => {
         if (!incomingMessage) return;
+
+        if (incomingMessage.type === "edit_message_success") {
+            setMessages(prev => prev.map(m =>
+                m.id === incomingMessage.message.id ? { ...m, message_text: incomingMessage.message.message_text, is_edited: true } : m
+            ));
+            toast.success("Сообщение изменено");
+            return;
+        }
+
+        // --- ОБРАБОТКА УДАЛЕНИЯ ---
+        if (incomingMessage.type === "delete_message_success") {
+            setMessages(prev => prev.filter(m => m.id !== incomingMessage.message.id));
+            toast.success("Сообщение удалено");
+            return;
+        }
+
         if (incomingMessage.chat_id !== selectedChatId) {
             const sender = incomingMessage.user_from || {};
             const avatar = `${apiMediaUrl}${sender.avatar}` || '/default-avatar.png';
@@ -259,8 +275,8 @@ export default function MessagesList() {
     return (
         <div className="messages-page">
             {/* Сайдбар */}
-            <div 
-                className={`chats-sidebar ${selectedChatId ? 'mobile-hidden' : ''} ${isSidebarNarrow ? 'narrow' : ''}`} 
+            <div
+                className={`chats-sidebar ${selectedChatId ? 'mobile-hidden' : ''} ${isSidebarNarrow ? 'narrow' : ''}`}
                 style={{ width: isSidebarNarrow ? '70px' : `${sidebarWidth}px` }}
                 ref={sidebarRef}
             >
@@ -306,11 +322,11 @@ export default function MessagesList() {
                             <button className="chat-back-btn mobile-only" onClick={() => setSelectedChatId(null)}>
                                 <BackIcon />
                             </button>
-                            
-                            <Link 
-                                to={`/profile/${selectedChat.user_1.id === currentUserId ? selectedChat.user_2.id : selectedChat.user_1.id}`} 
-                                className="chat-user-info" 
-                                style={{textDecoration: 'none'}}
+
+                            <Link
+                                to={`/profile/${selectedChat.user_1.id === currentUserId ? selectedChat.user_2.id : selectedChat.user_1.id}`}
+                                className="chat-user-info"
+                                style={{ textDecoration: 'none' }}
                             >
                                 <img
                                     src={selectedChat.user_1.id === currentUserId ? selectedChat.user_2.avatar : selectedChat.user_1.avatar}
@@ -325,8 +341,8 @@ export default function MessagesList() {
                                     </div>
                                     <div className="chat-header-status">
                                         {selectedChat.user_1.id === currentUserId
-                                            ? (selectedChat.user_2.online_status ? <span style={{color: '#3390ec'}}>в сети</span> : formatLastOnline(selectedChat.user_2.last_online))
-                                            : (selectedChat.user_1.online_status ? <span style={{color: '#3390ec'}}>в сети</span> : formatLastOnline(selectedChat.user_1.last_online))
+                                            ? (selectedChat.user_2.online_status ? <span style={{ color: '#3390ec' }}>в сети</span> : formatLastOnline(selectedChat.user_2.last_online))
+                                            : (selectedChat.user_1.online_status ? <span style={{ color: '#3390ec' }}>в сети</span> : formatLastOnline(selectedChat.user_1.last_online))
                                         }
                                     </div>
                                 </div>
@@ -358,6 +374,7 @@ export default function MessagesList() {
                                     >
                                         <div className="message-content">{msg.message_text}</div>
                                         <div className="message-time">
+                                            {msg.is_edit && <span className="edited-status">ред.</span>} 
                                             {formatMessageTime(msg.created_at)}
                                             {/* {msg.user_from?.id === currentUserId && <span className="read-status"> ✓✓</span>} */}
                                         </div>
@@ -384,25 +401,39 @@ export default function MessagesList() {
             </div>
 
             {contextMenu.visible && (
-                <div 
-                    className="context-menu" 
+                <div
+                    className="context-menu"
                     style={{ top: contextMenu.y, left: contextMenu.x }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="context-item" onClick={() => { console.log("Ответить", contextMenu.message); setContextMenu({...contextMenu, visible: false}); }}>
+                    <div className="context-item" onClick={() => { console.log("Ответить", contextMenu.message); setContextMenu({ ...contextMenu, visible: false }); }}>
                         <ReplyIcon /> <span>Ответить</span>
                     </div>
-                    <div className="context-item" onClick={() => { 
-                        navigator.clipboard.writeText(contextMenu.message.message_text); 
+                    <div className="context-item" onClick={() => {
+                        navigator.clipboard.writeText(contextMenu.message.message_text);
                         toast.success("Скопировано");
-                        setContextMenu({...contextMenu, visible: false}); 
+                        setContextMenu({ ...contextMenu, visible: false });
                     }}>
                         <CopyIcon /> <span>Копировать</span>
                     </div>
-                    <div className="context-item" onClick={() => { console.log("Изменить", contextMenu.message); setContextMenu({...contextMenu, visible: false}); }}>
+                    <div className="context-item" onClick={() => {
+                        const newText = prompt("Измените сообщение", contextMenu.message.message_text);
+                        if (!newText) return;
+                        sendMessage2("edit_message", {
+                            message_id: contextMenu.message.id,
+                            text: newText
+                        });
+                        setContextMenu({ ...contextMenu, visible: false });
+                    }}>
                         <EditIcon /> <span>Изменить</span>
                     </div>
-                    <div className="context-item delete" onClick={() => { console.log("Удалить", contextMenu.message); setContextMenu({...contextMenu, visible: false}); }}>
+                    <div className="context-item delete" onClick={() => {
+                        if (!window.confirm("Удалить сообщение?")) return;
+                        sendMessage2("delete_message", {
+                            message_id: contextMenu.message.id
+                        });
+                        setContextMenu({ ...contextMenu, visible: false });
+                    }}>
                         <DeleteIcon /> <span>Удалить</span>
                     </div>
                 </div>
