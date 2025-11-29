@@ -45,6 +45,16 @@ export const useMessagesSocket = () => {
         }
     }, []);
 
+    const markAsRead = useCallback((chatId) => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
+        wsRef.current.send(JSON.stringify({
+            type: "read_messages",
+            chat_id: chatId
+        }));
+    }, []);
+
+
     useEffect(() => {
         if (!accessToken) return;
 
@@ -76,10 +86,17 @@ export const useMessagesSocket = () => {
                         return;
                     }
 
+                    if (data.type === "message_read_success") {
+                        setIncomingMessage(data);
+                        return;
+                    }
+
                     if (data.type === "new_message" ||
                         data.type === "edit_message_success" ||
-                        data.type === "delete_message_success") {
-
+                        data.type === "delete_message_success" || 
+                        data.type === "edit_message_event" ||
+                        data.type === "delete_message_event") {
+                        console.log(data.type)
                         if (data.type === "new_message") {
                             setIncomingMessage(normalizeMessage(data.message));
                         } else {
@@ -131,6 +148,7 @@ export const useMessagesSocket = () => {
     return {
         sendMessage,
         sendMessage2,
+        markAsRead,
         incomingMessage,
         createdMessage,
         connected

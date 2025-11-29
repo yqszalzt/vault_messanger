@@ -67,6 +67,7 @@
   cursor: pointer;
   transition: background-color 0.2s;
   height: 72px; /* Фиксированная высота для предсказуемости */
+  position: relative;
 }
 
 /* Узкий режим (класс добавляется React-ом) */
@@ -242,13 +243,15 @@
 
 /* Разделитель даты */
 .messages-page .date-separator {
-    display: flex;
-    justify-content: center;
-    margin: 15px 0;
-    position: sticky;
-    top: 10px;
-    z-index: 5;
+    width: 100%;
+    text-align: center;
+    margin: 16px 0;        /* 👈 Даёт расстояние между “Сегодня” и “Вчера” */
+    font-weight: 500;
+    color: #666;
+    position: relative;
+    z-index: 1;            /* 👈 На случай перекрытий */
 }
+
 .messages-page .date-separator span {
     background-color: rgba(0,0,0,0.25);
     color: #fff;
@@ -269,10 +272,22 @@
   word-wrap: break-word;
   white-space: pre-wrap;
   display: flex;
-  flex-wrap: wrap; /* Чтобы время переносилось при необходимости */
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 6px;
   cursor: default; /* Чтобы показать что можно кликнуть ПКМ */
+}
+
+.unread-badge {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #3390ec;
+    color: #fff;
+    border-radius: 50%;
+    padding: 4px 7px;
+    font-size: 12px;
 }
 
 /* Время в сообщении */

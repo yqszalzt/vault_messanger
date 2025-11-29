@@ -1,6 +1,7 @@
 from rest_framework import status
-from django.db.models import Q
 from django.shortcuts import get_object_or_404, get_list_or_404
+from django.db.models import OuterRef, Subquery, DateTimeField, Q
+from django.db.models.functions import Coalesce
 
 from accounts.responses import SuccessResponse, ErrorResponse
 from accounts.views import AuthenticateView
@@ -18,13 +19,28 @@ class ChatView(AuthenticateView):
     Создание нового чата, просмотр всех сообщений из чата
 
     """
-
+    
     def get(self, request):
         __param_get_all_chats = request.GET.get("ac", None)
         if __param_get_all_chats:
             profile = get_object_or_404(Profile, user=request.user)
-            chats = Chat.objects.filter(Q(user_1=profile) | Q(user_2=profile))
-            return SuccessResponse(ChatSerializer(chats, many=True, context={"request": request}).data, status=status.HTTP_200_OK)
+
+            last_msg_subquery = Message.objects.filter(
+                chat=OuterRef('pk')
+            ).order_by('-created_at').values('created_at')[:1]
+
+            chats = Chat.objects.filter(
+                Q(user_1=profile) | Q(user_2=profile)
+            ).annotate(
+                last_msg_time=Subquery(last_msg_subquery, output_field=DateTimeField())
+            ).order_by(
+                Coalesce('last_msg_time', 'created_at').desc()
+            )
+
+            return SuccessResponse(
+                ChatSerializer(chats, many=True, context={"request": request}).data,
+                status=status.HTTP_200_OK
+            )
     
     def post(self, request):
         """

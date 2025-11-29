@@ -61,7 +61,7 @@ class MessagesConsumer(AsyncWebsocketConsumer):
                 }
             }))
 
-            opponent = chat.get_opponent(self.profile)
+            opponent = await self.get_opponent_safe(chat, self.profile)
             await self.channel_layer.group_send(
                 f"profile_{opponent.id}",
                 {
@@ -80,29 +80,92 @@ class MessagesConsumer(AsyncWebsocketConsumer):
             message_id = data.get("data").get("message_id")
             new_text = data.get("data").get("text")
             message = await self.get_message(message_id=message_id)
+            profile_data = await self.serialize_profile(self.profile)
             if message:
                 await self.update_message_text(message, new_text)
-                await self.send(text_data=json.dumps({
+
+                payload = {
                     "type": "edit_message_success",
                     "message": {
                         "id": message.id,
                         "message_text": message.message_text,
                         "is_edit": True,
                     }
-                }))
+                }
+
+                await self.send(text_data=json.dumps(payload))
+
+                chat = message.chat
+                opponent = await self.get_opponent_safe(message.chat, self.profile)
+                if opponent:
+                    await self.channel_layer.group_send(
+                        f"profile_{opponent.id}",
+                        {
+                            "type": "edit_message_event",
+                            "payload": payload
+                        }
+                    )
 
         elif data.get("type") == "delete_message":
-            print(data)
             message_id = data.get("data").get("message_id")
             message = await self.get_message(message_id=message_id)
             if message:
+                chat = message.chat
+                opponent = await self.get_opponent_safe(chat, self.profile)
+
                 await self.delete_message(message)
-                await self.send(text_data=json.dumps({
+
+                payload = {
                     "type": "delete_message_success",
                     "message": {
                         "id": message_id
                     }
-                }))
+                }
+
+                # отправляем обратно отправителю
+                await self.send(text_data=json.dumps(payload))
+
+                # уведомляем соперника
+                if opponent:
+                    await self.channel_layer.group_send(
+                        f"profile_{opponent.id}",
+                        {
+                            "type": "delete_message_event",
+                            "payload": payload
+                        }
+                    )
+                
+        elif data.get("type") == "messages_read":
+            chat_id = data.get("chat_id")
+            message_ids = data.get("message_ids", [])
+
+            if not chat_id or not message_ids:
+                return
+
+            chat = await self.get_chat(chat_id)
+            if not chat:
+                return
+
+            # отмечаем сообщения как прочитанные
+            await self.mark_messages_as_read(message_ids, self.profile)
+            opponent = await self.get_opponent_safe(chat, self.profile)
+
+            payload = {
+                "type": "messages_read",
+                "chat_id": chat_id,
+                "message_ids": message_ids,
+                "reader_id": self.profile.id
+            }
+
+            await self.send(text_data=json.dumps(payload))
+
+            await self.channel_layer.group_send(
+                f"profile_{opponent.id}",
+                {
+                    "type": "messages_read_event",
+                    "payload": payload
+                }
+            )
 
 
     async def new_message(self, event):
@@ -146,7 +209,9 @@ class MessagesConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_message(self, message_id: int):
         try:
-            message = Message.objects.get(id=message_id)
+            # Используем select_related('chat') для предварительной загрузки
+            # связанного объекта Chat в том же запросе.
+            message = Message.objects.select_related('chat').get(id=message_id)
             return message
         except Message.DoesNotExist:
             return None
@@ -162,3 +227,32 @@ class MessagesConsumer(AsyncWebsocketConsumer):
     def delete_message(self, message: Message):
         message.delete()
         return True
+
+    @database_sync_to_async
+    def mark_messages_as_read(self, message_ids, profile):
+        return Message.objects.filter(
+            id__in=message_ids
+        ).exclude(user_from=profile).update(is_read=True)
+
+    async def messages_read_event(self, event):
+        await self.send(text_data=json.dumps(event["payload"]))
+
+    async def edit_message_event(self, event):
+        await self.send(text_data=json.dumps(event["payload"]))
+
+    async def delete_message_event(self, event):
+        await self.send(text_data=json.dumps(event["payload"]))
+    
+    @database_sync_to_async
+    def get_opponent_safe(self, chat: Chat, profile: Profile):
+        """
+        Возвращает профиль оппонента в чате.
+        Алгоритм: если profile == user_1, вернуть user_2; иначе вернуть user_1.
+        """
+        user_1 = chat.user_1
+        user_2 = chat.user_2
+
+        if user_1.id == profile.id:
+            return user_2
+        elif user_2.id == profile.id:
+            return user_1
