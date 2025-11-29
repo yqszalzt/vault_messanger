@@ -43,26 +43,56 @@ const formatDateSeparator = (dateString) => {
 
 
 export default function MessagesList() {
+    const messagesEndRef = useRef(null);
+    const location = useLocation();
+    const chatIdFromState = location.state?.chatId;
+    const sidebarRef = useRef(null);
+
     const [chatsData, setChatsData] = useState([]);
     const [messages, setMessages] = useState([]);
     const [currentUserId, setCurrentUserId] = useState(0);
     const [selectedChatId, setSelectedChatId] = useState(null);
     const { accessToken, authRequest, dbReady } = useAuth();
-    const location = useLocation();
-    const chatIdFromState = location.state?.chatId;
     const [messageText, setMessageText] = useState("");
     const [sidebarWidth, setSidebarWidth] = useState(320);
     const [isResizing, setIsResizing] = useState(false);
-    const sidebarRef = useRef(null);
     const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, message: null });
-    const { sendMessage, sendMessage2, incomingMessage, createdMessage, markAsRead } = useMessagesSocket();
-    const messagesEndRef = useRef(null);
     const [notifiedMessageIds, setNotifiedMessageIds] = useState(new Set());
+    const { sendMessage, sendMessage2, incomingMessage, createdMessage, markAsRead, newChat } = useMessagesSocket();
 
     const startResizing = (e) => {
         setIsResizing(true);
         e.preventDefault();
     };
+
+    useEffect(() => {
+        if (!newChat || currentUserId === 0) return;
+
+        // 1. Нормализация данных (как в initial load)
+        const otherUser = newChat.user_1.id === currentUserId ? newChat.user_2 : newChat.user_1;
+        const normalizedChat = {
+            ...newChat,
+            other_user: otherUser,
+            unread_count: 0, // На старте 0
+        };
+
+        // 2. Добавление/обновление и сортировка
+        setChatsData(prev => {
+            // Проверяем, не пришел ли чат уже с сервера или через WS.
+            if (prev.some(chat => chat.id === newChat.id)) {
+                return prev;
+            }
+
+            const updated = [normalizedChat, ...prev];
+
+            // Сортировка (новый чат должен быть наверху, так как у него последняя активность)
+            return updated.sort((a, b) =>
+                new Date(b.last_message?.created_at || b.created_at) -
+                new Date(a.last_message?.created_at || a.created_at)
+            );
+        });
+
+    }, [newChat, currentUserId]);
 
     useEffect(() => {
         const handleMouseMove = (e) => {

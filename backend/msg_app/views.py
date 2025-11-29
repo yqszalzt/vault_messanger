@@ -2,6 +2,8 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404, get_list_or_404
 from django.db.models import OuterRef, Subquery, DateTimeField, Q
 from django.db.models.functions import Coalesce
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 from accounts.responses import SuccessResponse, ErrorResponse
 from accounts.views import AuthenticateView
@@ -74,6 +76,30 @@ class ChatView(AuthenticateView):
                     is_active=True
                 )
                 chat.save()
+
+                channel_layer = get_channel_layer()
+                chat_data = ChatSerializer(chat, context={"request": request}).data
+                
+                payload = {
+                    "type": "new_chat",
+                    "chat": chat_data,
+                }
+                
+                async_to_sync(channel_layer.group_send)(
+                    f"profile_{this_user.id}",
+                    {
+                        "type": "new_chat_event",
+                        "payload": payload
+                    }
+                )
+                
+                async_to_sync(channel_layer.group_send)(
+                    f"profile_{user_2.id}",
+                    {
+                        "type": "new_chat_event",
+                        "payload": payload
+                    }
+                )
 
                 return SuccessResponse(ChatSerializer(chat, context={"request": request}).data, status=status.HTTP_200_OK)
             

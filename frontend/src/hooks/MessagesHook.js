@@ -11,6 +11,7 @@ export const useMessagesSocket = () => {
 
     const [incomingMessage, setIncomingMessage] = useState(null); // new_message
     const [createdMessage, setCreatedMessage] = useState(null);   // create_message
+    const [newChat, setNewChat] = useState(null);
 
     const normalizeMessage = (msg) => ({
         ...msg,
@@ -91,6 +92,11 @@ export const useMessagesSocket = () => {
                         return;
                     }
 
+                    if (data.type === "new_chat") {
+                        setNewChat(data.chat);
+                        return;
+                    }
+
                     if (data.type === "new_message" ||
                         data.type === "edit_message_success" ||
                         data.type === "delete_message_success" || 
@@ -151,6 +157,7 @@ export const useMessagesSocket = () => {
         markAsRead,
         incomingMessage,
         createdMessage,
-        connected
+        connected,
+        newChat,
     };
 };

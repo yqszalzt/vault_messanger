@@ -256,3 +256,7 @@ class MessagesConsumer(AsyncWebsocketConsumer):
             return user_2
         elif user_2.id == profile.id:
             return user_1
+    
+    async def new_chat_event(self, event):
+        """Отправляет клиенту информацию о новом чате."""
+        await self.send(text_data=json.dumps(event["payload"]))
